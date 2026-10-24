@@ -2,7 +2,7 @@
 
 Cashu NFC card client library — crypto primitives and [Nutshell](https://github.com/cashubtc/nutshell) mint HTTP client.
 
-Part of the [Cashu-First Flash Cards](https://github.com/lnflash/cashu-javacard)
+Part of the [Cashu-First Flash Cards](https://github.com/cashucard/javacard)
 project — a physical card holding Bitcoin-denominated ecash on its own chip,
 spendable by tap with no phone, no account and no internet at the point of sale.
 
@@ -12,11 +12,11 @@ happens here.
 
 | To understand… | Read |
 |---|---|
-| Why the project exists | [VISION](https://github.com/lnflash/cashu-javacard/blob/main/docs/VISION.md) |
-| How the pieces fit | [ARCHITECTURE](https://github.com/lnflash/cashu-javacard/blob/main/docs/ARCHITECTURE.md) |
-| Why the API refuses things | [DECISIONS](https://github.com/lnflash/cashu-javacard/blob/main/docs/DECISIONS.md) |
-| What an attacker can do | [SECURITY-MODEL](https://github.com/lnflash/cashu-javacard/blob/main/docs/SECURITY-MODEL.md) |
-| A term you don't know | [GLOSSARY](https://github.com/lnflash/cashu-javacard/blob/main/docs/GLOSSARY.md) |
+| Why the project exists | [VISION](https://github.com/cashucard/javacard/blob/main/docs/VISION.md) |
+| How the pieces fit | [ARCHITECTURE](https://github.com/cashucard/javacard/blob/main/docs/ARCHITECTURE.md) |
+| Why the API refuses things | [DECISIONS](https://github.com/cashucard/javacard/blob/main/docs/DECISIONS.md) |
+| What an attacker can do | [SECURITY-MODEL](https://github.com/cashucard/javacard/blob/main/docs/SECURITY-MODEL.md) |
+| A term you don't know | [GLOSSARY](https://github.com/cashucard/javacard/blob/main/docs/GLOSSARY.md) |
 
 ## What's in here
 
@@ -50,7 +50,7 @@ covered:
 
 #### Crossing to the card: the card file
 
-The card driver ([`tools/cardctl`](https://github.com/lnflash/cashu-javacard))
+The card driver ([`tools/cardctl`](https://github.com/cashucard/javacard))
 is dependency-free Python so it runs anywhere a reader does; this library is
 TypeScript. Neither can call the other, so proofs cross as a file — and the
 schema for it lives here, in `cardFile`, rather than in either CLI. Both sides
@@ -197,7 +197,7 @@ as "safe to accept" — the inverse of the double-spend check's purpose.
 
 ```bash
 # yarn v1 (git dep, no npm publish needed)
-yarn add github:lnflash/cashu-client#v0.5.0
+yarn add github:cashucard/client#v0.5.0
 
 # or via npm
 npm install @lnflash/cashu-client
@@ -287,8 +287,8 @@ locked, not to produce more of it. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Spec
 
-- [NUT-XX: Cashu NFC Card Protocol](https://github.com/lnflash/cashu-javacard/blob/main/spec/NUT-XX.md)
-- [JavaCard applet](https://github.com/lnflash/cashu-javacard)
+- [NUT-XX: Cashu NFC Card Protocol](https://github.com/cashucard/javacard/blob/main/spec/NUT-XX.md)
+- [JavaCard applet](https://github.com/cashucard/javacard)
 
 ## License
 

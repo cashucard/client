@@ -15,7 +15,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/lnflash/cashu-client.git"
+    "url": "https://github.com/cashucard/client.git"
   },
   "license": "MIT",
   "dependencies": {

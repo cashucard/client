@@ -48,7 +48,7 @@ exports.reconstructProofsFromCard = reconstructProofsFromCard;
  * Without it the card's contents are inert: a terminal can read a slot and
  * still have no proof to hand the mint.
  *
- * See `spec/NUT-XX.md` in lnflash/cashu-javacard —
+ * See `spec/NUT-XX.md` in cashucard/javacard —
  * *Reconstructing the full Proof from card storage*.
  */
 const secp = __importStar(require("tiny-secp256k1"));

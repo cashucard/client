@@ -3,7 +3,7 @@
  *
  * This project is deliberately split across two toolchains: the mint protocol
  * is TypeScript (this library), and the card driver is Python
- * (`tools/cardctl` in lnflash/cashu-javacard, which stays dependency-free so it
+ * (`tools/cardctl` in cashucard/javacard, which stays dependency-free so it
  * can run anywhere a reader does). They cannot call each other, so proofs cross
  * the boundary as a file.
  *
@@ -56,7 +56,7 @@ import { sanitizeMintUrl } from "./http"
  * either way. It is on the *file* because `LOAD_PROOF` has no spent bit: a
  * spent proof written back onto a card returns as unspent and inflates the
  * balance with money that is already gone. See `spec/CARD-FILE.md` in
- * lnflash/cashu-javacard.
+ * cashucard/javacard.
  */
 export type CardFileSlot = CardProofSlot & {
   /** Whether the card has already marked this slot spent. */

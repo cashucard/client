@@ -6,7 +6,7 @@ exports.cardFileTotal = exports.serializeCardFile = exports.parseCardFile = expo
  *
  * This project is deliberately split across two toolchains: the mint protocol
  * is TypeScript (this library), and the card driver is Python
- * (`tools/cardctl` in lnflash/cashu-javacard, which stays dependency-free so it
+ * (`tools/cardctl` in cashucard/javacard, which stays dependency-free so it
  * can run anywhere a reader does). They cannot call each other, so proofs cross
  * the boundary as a file.
  *

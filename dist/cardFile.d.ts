@@ -8,7 +8,7 @@ import type { CardProofSlot } from "./card";
  * either way. It is on the *file* because `LOAD_PROOF` has no spent bit: a
  * spent proof written back onto a card returns as unspent and inflates the
  * balance with money that is already gone. See `spec/CARD-FILE.md` in
- * lnflash/cashu-javacard.
+ * cashucard/javacard.
  */
 export type CardFileSlot = CardProofSlot & {
     /** Whether the card has already marked this slot spent. */

@@ -6,7 +6,7 @@
 
 - **`cardFile` module — the interchange format between the mint side and the
   card side.** The mint protocol is TypeScript (this library) and the card
-  driver is dependency-free Python (`tools/cardctl` in lnflash/cashu-javacard),
+  driver is dependency-free Python (`tools/cardctl` in cashucard/javacard),
   so proofs cross the boundary as a file. The schema is defined here, once, and
   both sides validate against it — a field that drifts fails at the boundary
   instead of at the mint, where the card may already have burned the slot.
