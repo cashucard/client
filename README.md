@@ -287,7 +287,10 @@ locked, not to produce more of it. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Spec
 
-- [NUT-XX: Cashu NFC Card Protocol](https://github.com/cashucard/javacard/blob/main/spec/NUT-XX.md)
+- [NUT-XX](https://github.com/cashucard/javacard/blob/c1f4580/spec/NUT-XX.md), the 0.x draft this
+  library implements: Profile B's 78-byte slots and `SIG_INPUTS` secrets
+- [NUT-CCP](https://github.com/cashucard/nut/blob/main/CCP.md), the Cashu Card Protocol's core,
+  which 2.x cards implement
 - [JavaCard applet](https://github.com/cashucard/javacard)
 
 ## License
