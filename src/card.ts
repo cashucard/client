@@ -11,7 +11,7 @@
  * Without it the card's contents are inert: a terminal can read a slot and
  * still have no proof to hand the mint.
  *
- * See `spec/NUT-XX.md` in cashucard/javacard —
+ * See the 0.x draft, `spec/NUT-XX.md` in cashucard/javacard at c1f4580 —
  * *Reconstructing the full Proof from card storage*.
  */
 import * as secp from "tiny-secp256k1"
