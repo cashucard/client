@@ -1,14 +1,13 @@
 # @lnflash/cashu-client
 
-Cashu NFC card client library — crypto primitives and [Nutshell](https://github.com/cashubtc/nutshell) mint HTTP client.
+Cashu NFC card client library for crypto primitives and [Nutshell](https://github.com/cashubtc/nutshell) mint HTTP requests.
 
 Part of the [Cashu-First Flash Cards](https://github.com/cashucard/javacard)
-project — a physical card holding Bitcoin-denominated ecash on its own chip,
-spendable by tap with no phone, no account and no internet at the point of sale.
+project. The card holds Bitcoin-denominated ecash on its own chip and supports
+spending by tap at the point of sale, without a phone, account or internet connection.
 
-This library is the **host half**: the card itself does no blinding, no mint
-communication and no verification. It stores proofs and signs. Everything else
-happens here.
+This library is the **host half**. The card stores proofs and signs. The host
+library handles blinding, mint communication and verification.
 
 | To understand… | Read |
 |---|---|
@@ -23,23 +22,22 @@ happens here.
 | Module | Description |
 |--------|-------------|
 | `crypto` | NUT-00 `hash_to_curve`, NUT-03 BDHKE blinding/unblinding, NUT-10 P2PK secret serialization, denomination splitting |
-| `card` | Reconstructing a spendable proof from a card's 78-byte slot layout — NUT-10 P2PK secret recovery |
-| `cardFile` | The interchange format between this library and the Python card driver — one schema both sides validate against |
-| `mint` | Nutshell HTTP client — NUT-01 keysets, NUT-04 mint quotes + proof issuance |
-| `witness` | NUT-11 P2PK witnesses — the message a card must sign, attaching its signature, verifying the result |
-| `melt` | NUT-05 melting — quote, execute, and proof selection. **This is how a card gets redeemed.** |
-| `swap` | NUT-03 swapping — change, receiving, and unlocking card-locked proofs |
-| `state` | NUT-07 proof state — the double-spend check |
-| `dleq` | NUT-12 discrete-log equality — verify a mint signed with its published key, offline |
+| `card` | Reconstructs a spendable proof from a card's 78-byte slot layout using NUT-10 P2PK secret recovery |
+| `cardFile` | Defines the interchange format shared by this library and the Python card driver |
+| `mint` | Nutshell HTTP client for NUT-01 keysets and NUT-04 mint quotes and proof issuance |
+| `witness` | Builds NUT-11 P2PK witnesses from the message a card signs, attaches the signature and verifies the result |
+| `melt` | Handles NUT-05 melt quotes, execution and proof selection for card redemption |
+| `swap` | Handles NUT-03 change, receiving and unlocking of card-locked proofs |
+| `state` | Checks NUT-07 proof state for double spends |
+| `dleq` | Verifies offline that a mint signed with its published key using NUT-12 discrete-log equality |
 | `http` | Shared URL sanitising and response limits for every mint call |
 | `types` | Shared TypeScript types (`CashuProof`, `CashuMeltQuote`, `CashuProofState`, …) |
 | `errors` | Typed error classes with numeric codes |
 
 ### The card lifecycle
 
-The library previously wrote the P2PK *lock* and had no way to produce the
-*unlock*, so a card could be funded and never spent. The full round trip is now
-covered:
+The library now supports the full round trip for P2PK-locked card proofs. Earlier
+versions could fund a card but could not produce the *unlock* needed to spend it.
 
 | Stage | Calls |
 |---|---|
@@ -51,12 +49,10 @@ covered:
 #### Crossing to the card: the card file
 
 The card driver ([`tools/cardctl`](https://github.com/cashucard/javacard))
-is dependency-free Python so it runs anywhere a reader does; this library is
-TypeScript. Neither can call the other, so proofs cross as a file — and the
-schema for it lives here, in `cardFile`, rather than in either CLI. Both sides
-validate against the same definition, so a field that drifts fails at the
-boundary instead of at the mint, where the card may already have burned the
-slot on `SPEND_PROOF`.
+is dependency-free Python so it runs anywhere a reader does. This library is
+TypeScript, and proofs cross the boundary as a file. The `cardFile` module owns
+the schema, and both sides validate against it. A field mismatch fails before
+the card can burn a slot with `SPEND_PROOF`.
 
 ```jsonc
 {
@@ -87,8 +83,8 @@ import {
 } from "@lnflash/cashu-client"
 
 // mint → card: hand this to cardctl to load. `blindingData` is what
-// createBlindedMessage returned — it carries the 32-byte nonce the card
-// stores, which is not recoverable from anything else in the proof.
+// createBlindedMessage returned. It carries the 32-byte nonce the card
+// stores. The proof contains no other copy of that nonce.
 const json = serializeCardFile({
   mint: MINT_URL,
   unit: "sat",
@@ -96,7 +92,7 @@ const json = serializeCardFile({
   slots: proofs.map((p, i) => ({
     keysetId: p.id,
     amount: p.amount,
-    nonce: blindingData[i].nonce, // the 32-byte nonce, not the ~150-byte secret
+    nonce: blindingData[i].nonce, // the 32-byte nonce; P2PK secret JSON is ~150 bytes
     C: p.C,
     spent: false, // required; the writer refuses a true
   })),
@@ -104,7 +100,7 @@ const json = serializeCardFile({
 })
 
 // card → mint: what cardctl dumped, ready to spend. Compare against the
-// *sanitised* URL — `card.mint` comes back canonical, and a raw constant with
+// *sanitised* URL. `card.mint` comes back canonical, and a raw constant with
 // a trailing slash would reject a card from the right mint.
 const card = parseCardFile(await fs.readFile("card.json", "utf8"))
 if (card.mint !== sanitizeMintUrl(MINT_URL)) throw new Error("card is from a different mint")
@@ -113,10 +109,9 @@ const spendable = reconstructProofsFromCard(unspent, card.cardPubkey)
 console.log(`${cardFileTotal(card)} ${card.unit} across ${unspent.length} slots`)
 ```
 
-**The wire shape is the card's vocabulary, not `CashuProof`'s.** `nonce`, not
-`secret`, and `keysetId` as 16 hex chars — because that is what the card
-actually stores. A file that said `secret` would invite ~150 bytes of P2PK JSON
-into a field that holds 32 bytes, so that spelling is rejected by name.
+**The wire shape uses the card's vocabulary.** It stores `nonce` and a
+16-character hex `keysetId`. A `secret` field could carry ~150 bytes of P2PK
+JSON into a field that holds 32 bytes, so the parser rejects that field name.
 
 **`serializeCardFile` is the only gate in the mint → card direction.** cardctl
 does no curve math, so whatever this writes reaches the card. It therefore
@@ -124,79 +119,75 @@ round-trips the file through `parseCardFile` *and* through the redeem path
 (`reconstructProofsFromCard`, result discarded) before returning: what it
 writes is, by construction, what the spend path reads back. An on-prefix but
 off-curve `C` would otherwise load fine, burn the slot on `SPEND_PROOF`, and be
-rejected by the mint as a proof that was never spendable.
+rejected by the mint as an invalid proof.
 
-**Both directions refuse rather than repair.** Unknown fields (bump `version`
-instead of adding one silently), a `note` that is not a string or is over 512
-characters, a non-v0 or half-length `keysetId`, an amount that is not a positive
-power of two or is `2^32` or larger (`LOAD_PROOF` carries it as four bytes), a
-missing or non-boolean `spent`, a mint URL the HTTP sanitiser refuses, and — the
-shapes every per-slot check otherwise waves through — **the same `C` in two
-slots** or **the same `nonce` in two slots**. Either way both copies load; the
-first redeems, the second burns on `SPEND_PROOF` and comes back already-spent,
-while `cardFileTotal` told the holder the card was worth double. `C` repeats are
-the same signature twice; `nonce` repeats are subtler, since the secret is
-derived from the nonce and the card key alone, so two slots with one nonce
-reconstruct to one proof even when their amounts and `C` values differ.
-`mint` and `unit` come back canonicalised, so the comparison above is not
-defeated by a trailing slash — on either side, which is why `MINT_URL` goes
-through `sanitizeMintUrl` too.
+**Validation preserves the file's meaning.** The parser rejects unknown fields
+(bump `version` when adding a field), notes that are not strings or exceed 512
+characters, non-v0 or half-length `keysetId` values, amounts that are not
+positive powers of two below `2^32` (the four-byte `LOAD_PROOF` limit), missing
+or non-boolean `spent` values, and mint URLs rejected by the HTTP sanitiser.
+It also rejects duplicate `C` values and duplicate `nonce` values across slots.
+Duplicate `C` values repeat the same signature. Duplicate nonces reconstruct
+to one proof because the secret derives from the nonce and card key alone, even
+when amounts and `C` values differ. Either duplicate can make the second slot
+burn on `SPEND_PROOF` after the first proof redeems, while `cardFileTotal` had
+counted both. The `mint` and `unit` fields return in canonical form. Pass
+`MINT_URL` through `sanitizeMintUrl` before comparing it with `card.mint`.
 
-**`spent` travels card → mint only.** `parseCardFile` keeps it because a card
-dump is where it comes from; `serializeCardFile` refuses a `spent: true` slot,
-because `LOAD_PROOF` has no spent bit and a spent proof written back onto a card
-returns as spendable. Filter them out before serializing — topping up an
-existing card is dump, drop the spent slots, append, write. `cardFileTotal`
-counts only the unspent slots, for the same reason.
+**`spent` travels from card to mint.** `parseCardFile` preserves the bit from a
+card dump. `serializeCardFile` rejects a `spent: true` slot because `LOAD_PROOF`
+has no spent bit. Loading it would make the card report the proof as unspent,
+even if the mint has already consumed it. To top up a card, dump it, remove spent
+slots, append new slots and serialize.
+`cardFileTotal` counts only slots the card reports as unspent. The mint may have
+already consumed a proof from one of those slots, so check its proof state before
+use.
 
-Five things worth knowing before wiring this up.
+Integration considerations:
 
-**A card slot is not a proof.** A NUT-10 P2PK secret is ~150 bytes of JSON and a
-slot is 78 bytes total, so the card stores the 32-byte *nonce* and nothing else;
+**Reconstruct proofs from card slots.** A NUT-10 P2PK secret is ~150 bytes of
+JSON, while a slot is 78 bytes total. The card stores the 32-byte *nonce*;
 `reconstructProofsFromCard` rebuilds the secret from the nonce, the card's public
 key and the fixed tag set. Without that step `GET_PROOF` gives you bytes and no
-`CashuProof` to hand `selectProofsForMelt`. It throws on a malformed slot rather
-than returning a proof the mint will reject — by then the card may already have
-burned the slot on `SPEND_PROOF`. Pass `{skipInvalid: true}` to get
-`{proofs, failures}` back instead and read the rest of a card around one corrupt
-slot; check each failure's class first, since a bad *card key* fails every slot
-and means abort the card, not skip a slot.
+`CashuProof` to hand `selectProofsForMelt`. `reconstructProofsFromCard` rejects
+malformed slots because the card may already have burned them on `SPEND_PROOF`.
+Pass `{skipInvalid: true}` to get `{proofs, failures}` and read the rest of a
+card around one corrupt slot. Check each failure's class first. A bad *card key* fails every slot, so
+abort card processing when the card key is bad.
 
-**Melt and swap are not idempotent** — the inputs are consumed when the mint
-accepts them, so after a lost response the correct move is `getMeltQuoteState`
-or `checkProofStates`, never a retry.
+**Melt and swap consume their inputs.** After the mint accepts them, a lost
+response requires checking `getMeltQuoteState` or `checkProofStates` before
+taking further action. Do not retry the request.
 
-**`meltProofs` refuses to submit a proof whose P2PK witness is missing or
-invalid**, because by the time a terminal is assembling a melt the card has
-already marked its slots spent; failing locally leaves the proof intact, whereas
-failing at the mint does not. The local check honours the secret's `sigflag` and
-`n_sigs` tags, and refuses outright on a tag it does not implement — or on a tag
-it cannot parse, since a dropped tag is indistinguishable from an absent one. A
-check looser than the mint's would pass locally and still burn the slots. Same
-reasoning for a NUT-10 secret of a kind this library cannot verify (an HTLC, or
-a P2PK secret with a malformed body): it is reported by `findUnsignedProofs`
-rather than treated as an unlocked, witness-free proof.
+**`meltProofs` checks each P2PK witness before submission.** The card has
+already marked its slots spent when a terminal assembles a melt, so this
+preflight rejects missing or invalid witnesses and unsupported or malformed
+spending conditions before the request reaches the mint. The preflight checks
+the supported `sigflag` and `n_sigs` tags. It rejects tags it does not implement
+or cannot parse, because a dropped tag is indistinguishable from an absent one.
+`findUnsignedProofs` reports NUT-10 secrets the library cannot verify, such as
+HTLCs or P2PK secrets with malformed bodies.
 
-**Overpay is silent.** `changeOutputs` on `meltProofs` is optional and anything
-overpaid without them is kept by the mint, so `selectProofsForMelt` minimises
-the overpay rather than taking the largest proof that fits. If the mint charges
-a NUT-02 `input_fee_ppk`, pass it to `selectProofsForMelt` and `swapProofs` —
+**The mint keeps overpayment when you omit change outputs.** `changeOutputs` on
+`meltProofs` is optional, so `selectProofsForMelt` minimises the overpay rather
+than taking the largest proof that fits. If the mint charges
+a NUT-02 `input_fee_ppk`, pass it to `selectProofsForMelt` and `swapProofs`,
 otherwise every request is short by exactly the fee and gets rejected. The rate
 is declared *per keyset*, so once a rotation leaves a card holding proofs from
-two of them, pass a `{[keysetId]: input_fee_ppk}` map instead of one number; a
-single rate applied to a mixed set is refused rather than mispriced.
+two of them, pass a `{[keysetId]: input_fee_ppk}` map instead of one number. A
+single rate applied to a mixed set is rejected to prevent mispricing.
 
-**The error-returning calls return errors, not falsy values.** These functions
-return `T | CashuMintError` rather than throwing, so check before use.
+**Error-returning calls use a `T | CashuMintError` result.** These functions
+return errors instead of throwing, so check the result before use.
 `allProofsUnspent` in particular returns `"UNSPENT" | "NOT_UNSPENT" |
-CashuMintError` and never a bare boolean: an error is a truthy object, so a
-boolean union would make `if (await allProofsUnspent(...))` read a mint timeout
-as "safe to accept" — the inverse of the double-spend check's purpose.
+CashuMintError` instead of a boolean. Since an error is a truthy object,
+`if (await allProofsUnspent(...))` could read a mint timeout as "safe to accept,"
+which reverses the double-spend check's purpose.
 
 ## Install
 
 ```bash
-# yarn v1 (git dep, no npm publish needed)
+# yarn v1 (Git dependency)
 yarn add github:cashucard/client#v0.5.0
 
 # or via npm
@@ -254,7 +245,7 @@ const proofs = sigs.map((sig, i) => ({
   dleq: proofDLEQFromBlindSignature(sig, blindingData[i].r),
 }))
 
-// 7. Verify offline — no mint contact, no trust in whoever handed these over.
+// 7. Check available DLEQ proofs locally with the published mint key.
 //    Undefined dleq means the mint emits none; that is a policy call for you.
 const mintKey = amount => keysetDetail.keys[String(amount)]
 const verified = proofs.every(p => !p.dleq || verifyProofDLEQ(p, mintKey(p.amount)))
@@ -264,10 +255,10 @@ const verified = proofs.every(p => !p.dleq || verifyProofDLEQ(p, mintKey(p.amoun
 
 **0.4.0 changes `buildP2PKSecret` output for upper-case hex input.** It now
 lower-cases the nonce and the card pubkey, so the serialization has one canonical
-form. Proofs minted by **0.3.0 or earlier with an upper-case `cardPubkey` are not
-reconstructable by this version**: the secret is committed to at mint time as
-UTF-8 bytes — `Y = hash_to_curve(secret)` — so the canonical secret is a
-different proof, one the mint has never signed.
+form. This version cannot reconstruct proofs minted by **0.3.0 or earlier with
+an upper-case `cardPubkey`**. The mint commits to the secret as UTF-8 bytes using
+`Y = hash_to_curve(secret)`. The canonical secret therefore produces a different
+proof that the mint has never signed.
 
 Cards funded that way stay redeemable via the escape hatch:
 
@@ -277,13 +268,13 @@ const legacy = reconstructProofFromCard(slot, cardPubkey, {legacyHexCase: true})
 ```
 
 The hatch freezes the case of `data` only. Pre-0.4.0 `createBlindedMessage`
-generated the nonce here as lower-case hex and never read one off a card, so the
-card key is the only field whose case could ever have reached a minted secret —
-freezing the nonce's too would build a secret no released version ever minted,
-and you would find out at the mint, after `SPEND_PROOF` burned the slot.
+generated the nonce in lower-case hex without reading one from a card. The mint
+could only have seen the card key's original casing. Freezing the nonce's case
+as well would create a secret no released version minted. The mint would reject
+it after `SPEND_PROOF` burned the slot.
 
-Never mint with `legacyHexCase`. It exists to spend what the old code already
-locked, not to produce more of it. See [CHANGELOG.md](CHANGELOG.md).
+Use `legacyHexCase` only to spend proofs locked by the old code. See
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Spec
 
