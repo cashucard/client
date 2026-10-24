@@ -4,12 +4,12 @@
 
 ### Added
 
-- **`cardFile` module — the interchange format between the mint side and the
-  card side.** The mint protocol is TypeScript (this library) and the card
-  driver is dependency-free Python (`tools/cardctl` in cashucard/javacard),
-  so proofs cross the boundary as a file. The schema is defined here, once, and
-  both sides validate against it — a field that drifts fails at the boundary
-  instead of at the mint, where the card may already have burned the slot.
+- **`cardFile` module: the interchange format between the mint and card sides.**
+  The mint protocol uses this TypeScript library, and the card driver is
+  dependency-free Python (`tools/cardctl` in cashucard/javacard). Proofs cross
+  the boundary as a file. This module defines the schema, and both sides
+  validate against it. A field mismatch fails at the boundary before the mint
+  can reject it after the card has burned the slot.
 
   ```jsonc
   {
@@ -21,62 +21,60 @@
       {
         "keysetId": "0059534ce0bfa19a",   // NUT-02 v0, 8 bytes
         "amount": 8,                      // positive power of two, below 2^32
-        "nonce": "916c…",                 // 32 bytes — NOT the secret; unique per slot
+        "nonce": "916c…",                 // 32 bytes, unique per slot; the secret is derived from it
         "C": "02c6…",                     // 33 bytes, on-curve, unique per slot
         "spent": false                    // required; card → mint only
       }
     ],
-    "note": "loaded at till 2"            // optional, ≤ 512 chars, never trusted
+    "note": "loaded at till 2"            // optional, ≤ 512 chars; display as untrusted text
   }
   ```
 
   Two entry points:
 
-  - `serializeCardFile(file, {pretty})` — **mint → card.** Round-trips the file
+  - `serializeCardFile(file, {pretty})`: **mint → card.** Round-trips the file
     through `parseCardFile` and then through the redeem path
     (`reconstructProofsFromCard`, result discarded) before writing. This is the
     only gate in that direction: cardctl does no curve math, so whatever this
-    writes is what reaches the card. It also refuses a `spent: true` slot — see
-    the `spent` row below.
-  - `parseCardFile(stringOrObject)` — **card → mint.** Returns a `CardFile`
-    whose `slots` feed `reconstructProofsFromCard` directly, with no field
-    renaming in between. Throws on anything malformed; a card file is an
-    instruction to move money on or off a bearer instrument, so there is no
-    useful partial success.
+    writes is what reaches the card. It also rejects a `spent: true` slot, as
+    described in the `spent` row below.
+  - `parseCardFile(stringOrObject)`: **card → mint.** Returns a `CardFile`
+    whose `slots` feed `reconstructProofsFromCard` directly without field
+    renaming. It reports malformed input as an error because each card file
+    directs a money movement on or off a bearer instrument.
 
   Also exported: `parseCardSlot`, `cardFileTotal`, `CARD_FILE_VERSION` and the
   `CardFile` and `CardFileSlot` types. `cardFileTotal` sums the **unspent**
   slots only: a spent proof is money already gone, and this number is what a
   terminal shows a holder as the card's worth.
 
-  The wire shape carries the *card's* vocabulary — `nonce`, not `secret`, and
-  `keysetId` as 16 hex chars — because that is what the card stores. A file that
-  said `secret` would invite ~150 bytes of P2PK JSON into a 32-byte field, so
-  that spelling is rejected by name rather than as an unknown field.
+  The wire shape uses the *card's* vocabulary: `nonce` and a 16-character
+  hexadecimal `keysetId`. A `secret` field could place ~150 bytes of P2PK JSON
+  in a 32-byte field, so the parser rejects that field name explicitly.
 
-  What the reader refuses, and why each one would otherwise burn a slot:
+  The parser rejects these values to protect card slots:
 
   | Refused | Because |
   |---|---|
   | An unknown field | A future cardctl added it and forgot to bump `version`; dropping it silently is the drift `version` exists to announce |
-  | A `note` that is not a string, or is over 512 characters | Same drift, on a known field — and `note` is the file's only provenance record, third-party data a terminal renders back to a human |
+  | A `note` with the wrong type or over 512 characters | The note is the file's only provenance record, and a terminal renders this third-party data to a person |
   | An off-curve or bad-prefix `C` / `cardPubkey` | Produces a proof that was never spendable; cardctl cannot catch it |
   | A non-v0 or half-length `keysetId` | Matches no keyset at the mint |
   | An amount that is not a positive power of two | A mint keyset has no key for 3 |
   | An amount of `2^32` or more | `LOAD_PROOF` carries the amount as a 4-byte unsigned integer, so a larger one cannot be written to a card even though it is a valid denomination elsewhere |
-  | A missing or non-boolean `spent` | Required, never defaulted: defaulting to `false` silently resurrects a spent proof as spendable on the next load |
+  | A missing or non-boolean `spent` | The field is required. Defaulting to `false` could make a spent proof spendable on the next load |
   | **The same `C` in two slots** | Every per-slot check passes and both copies load; slot 0 redeems, slot 1 burns on `SPEND_PROOF` and the mint refuses it as already spent, while `cardFileTotal` claimed the card held double |
-  | **The same `nonce` in two slots** | The secret is `buildP2PKSecret(nonce, cardPubkey)` and nothing else, so two slots sharing a nonce reconstruct to one proof — same `Y` at the mint — even with different amounts and therefore different `C`. Same burn as the row above, one field over |
-  | A mint URL the HTTP sanitiser refuses | A bearer instrument's file is third-party data — it can carry a link-local or metadata URL |
+  | **The same `nonce` in two slots** | `buildP2PKSecret(nonce, cardPubkey)` derives the secret from the nonce and card key. Two slots sharing a nonce reconstruct to one proof with the same `Y` at the mint, even when their amounts and `C` values differ. The second slot can burn after the first redeems |
+  | A mint URL the HTTP sanitiser refuses | The file is third-party data for a bearer instrument and could carry a link-local or metadata URL |
   | A `spent: true` slot, **in the writer only** | `parseCardFile` keeps the bit because a card dump is where it comes from, but `LOAD_PROOF` has no spent bit: re-serializing a dump (the "top up an existing card" flow) would write spent proofs back and the card would return them as spendable. Filter them out before serializing |
 
 ### Changed
 
 - `mint` and `unit` are stored canonical (`mint` through the same
   `sanitizeMintUrl` every network path uses; `unit` trimmed and lower-cased).
-  Both exist to be compared — `file.mint === expected`, `file.unit ===
-  keyset.unit` — and an untrimmed value makes those comparisons return false
-  against the right mint or the right keyset, silently.
+  Both fields support direct comparisons: `file.mint === expected` and
+  `file.unit === keyset.unit`. Untrimmed values could make either comparison
+  fail for the correct mint or keyset.
 - The package barrel exports `card`'s public surface by name rather than with
   `export *`. `requireHex`, `requirePoint`, `requireKeysetV0`, `requireAmount`
   and the `CardField` type are exported from the module so `cardFile.ts` can
@@ -94,14 +92,14 @@
 - **`buildP2PKSecret` now lower-cases the nonce and the card pubkey.** The
   serialization has one canonical form, so a proof cannot be minted under one
   hex case and reconstructed under another. The secret is committed to at mint
-  time as UTF-8 bytes — `Y = hash_to_curve(secret)` — which makes the two cases
-  two different proofs.
+  time as UTF-8 bytes. The calculation `Y = hash_to_curve(secret)` makes the two
+  hex cases produce different proofs.
 
   **Proofs minted by <= 0.3.0 with an upper-case `cardPubkey` are not
   reconstructable by this version.** The canonical secret hashes to a `Y` the
   mint has never signed, and because `SPEND_PROOF` marks a slot spent *before*
-  returning its signature, the card burns the slot and the mint then rejects the
-  proof — the exact failure this release exists to prevent.
+  returning its signature, the card burns the slot and the mint rejects the
+  proof. This release prevents that failure.
 
   Cards funded that way remain redeemable:
 
@@ -120,9 +118,8 @@
 ### Added
 
 - `card` module: `reconstructProofFromCard` / `reconstructProofsFromCard` turn
-  what `GET_PROOF` returns into a spendable `CashuProof`. Previously a card's
-  contents were inert — a terminal could read every slot and still have no proof
-  to hand the mint.
+  what `GET_PROOF` returns into a spendable `CashuProof`. Earlier versions let
+  a terminal read every slot without producing a proof to hand the mint.
 - `reconstructProofsFromCard(slots, cardPubkey, {skipInvalid: true})` returns
   `{proofs, failures}` so one corrupt slot no longer makes the rest of the card
   unreadable through this API. The default stays throw-on-first-failure.
