@@ -137,7 +137,7 @@ counted both. The `mint` and `unit` fields return in canonical form. Pass
 **`spent` travels from card to mint.** `parseCardFile` preserves the bit from a
 card dump. `serializeCardFile` rejects a `spent: true` slot because `LOAD_PROOF`
 has no spent bit. Loading it would make the card report the proof as unspent,
-even though the mint has already consumed it. To top up a card, dump it, remove spent
+even if the mint has already consumed it. To top up a card, dump it, remove spent
 slots, append new slots and serialize.
 `cardFileTotal` counts only slots the card reports as unspent. The mint may have
 already consumed a proof from one of those slots, so check its proof state before
