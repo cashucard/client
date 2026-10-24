@@ -15,7 +15,10 @@ This report records the package as reviewed on 2026-06-22. Follow-ups below desc
 
 **The cryptographic primitives are sound. The trust model needed stronger checks.** The BDHKE math is correct, and spec test vectors now pin the `hash_to_curve` endianness fix. The client previously lacked request and response binding and DLEQ verification. This PR closes the contained fund-safety gaps and hardens inputs. DLEQ verification remained a follow-up.
 
-## ✅ Verified correct (no change needed)
+<a id="-verified-correct-no-change-needed"></a>
+<a id="verified-correct-no-change-needed"></a>
+
+## Review findings
 
 - **`hash_to_curve` follows NUT-00**: its domain separator, SHA256 loop, `0x02` prefix and **little-endian** counter match the published vectors in `test/crypto.spec.ts`. The endianness fix is pinned by those tests.
 - **Blinding/unblinding math** (`B'=Y+rG`, `C=C'−rK`) and **point negation** are exact.
@@ -23,7 +26,10 @@ This report records the package as reviewed on 2026-06-22. Follow-ups below desc
 - **NUT-10 secret via `JSON.stringify`** (no injection); axios timeout + `maxRedirects:0`; path params sanitized; no logging / no secret leakage.
 - **Tooling**: `strict` on; zero `any`/`@ts-ignore`/`console`/TODO; **0 production-dependency vulnerabilities**; clean supply chain (WASM crypto dependency; native dependencies and install scripts are absent).
 
-## 🔧 Fixed in this PR
+<a id="-fixed-in-this-pr"></a>
+<a id="fixed-in-this-pr"></a>
+
+## Implemented fixes
 
 | Finding | Severity | Fix |
 |---------|----------|-----|
@@ -40,9 +46,10 @@ This report records the package as reviewed on 2026-06-22. Follow-ups below desc
 
 All verified: `npm run build` clean, **31/31 tests pass** (29 + 2 new spec vectors), committed `dist/` rebuilt and in sync.
 
+<a id="-remaining-follow-ups-documented-not-in-this-pr"></a>
 <a id="remaining-follow-ups-documented-not-in-this-pr"></a>
 
-## 📋 Remaining follow-ups as of 2026-06-22
+## Remaining follow-ups as of 2026-06-22
 
 - **NUT-12 DLEQ verification** *(High)*: The client did not prove that the mint signed with its advertised key. A malicious mint could use this gap as a per-user-key **tagging/deanonymization oracle**. The work requires `e,s` proof handling and warrants its own PR. Amount and keyset binding reduce fund-loss risk while privacy verification remains outstanding.
 - **Migrate `tiny-secp256k1` → `@noble/curves`** *(Medium)*: The audited (Cure53/ToB), constant-time, pure-JS library avoids a WASM loader and was the ecosystem standard. A migration needs its own PR and re-verification against the spec-vector tests.

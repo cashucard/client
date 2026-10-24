@@ -123,22 +123,25 @@ rejected by the mint as an invalid proof.
 
 **Validation preserves the file's meaning.** The parser rejects unknown fields
 (bump `version` when adding a field), notes that are not strings or exceed 512
-characters, non-v0 or half-length `keysetId` values, invalid amounts, missing
+characters, non-v0 or half-length `keysetId` values, amounts that are not
+positive powers of two below `2^32` (the four-byte `LOAD_PROOF` limit), missing
 or non-boolean `spent` values, and mint URLs rejected by the HTTP sanitiser.
 It also rejects duplicate `C` values and duplicate `nonce` values across slots.
 Duplicate `C` values repeat the same signature. Duplicate nonces reconstruct
 to one proof because the secret derives from the nonce and card key alone, even
 when amounts and `C` values differ. Either duplicate can make the second slot
 burn on `SPEND_PROOF` after the first proof redeems, while `cardFileTotal` had
-counted both. Amounts of `2^32` or more exceed the four-byte `LOAD_PROOF` field.
-The `mint` and `unit` fields return in canonical form. Pass `MINT_URL` through
-`sanitizeMintUrl` before comparing it with `card.mint`.
+counted both. The `mint` and `unit` fields return in canonical form. Pass
+`MINT_URL` through `sanitizeMintUrl` before comparing it with `card.mint`.
 
 **`spent` travels from card to mint.** `parseCardFile` preserves the bit from a
 card dump. `serializeCardFile` rejects a `spent: true` slot because `LOAD_PROOF`
-has no spent bit; loading a spent proof would make it spendable again. To top up
-a card, dump it, remove spent slots, append new slots and serialize.
-`cardFileTotal` counts only unspent slots.
+has no spent bit. Loading it would make the card report the proof as unspent,
+even though the mint has already consumed it. To top up a card, dump it, remove spent
+slots, append new slots and serialize.
+`cardFileTotal` counts only slots the card reports as unspent. The mint may have
+already consumed a proof from one of those slots, so check its proof state before
+use.
 
 Integration considerations:
 
@@ -156,14 +159,14 @@ abort card processing when the card key is bad.
 response requires checking `getMeltQuoteState` or `checkProofStates` before
 taking further action. Do not retry the request.
 
-**`meltProofs` rejects a proof whose P2PK witness is missing or invalid**,
-because the card has already marked its slots spent when a terminal assembles a
-melt. Local checks protect the proof after the card marks its slots spent. The
-local check honours the secret's `sigflag` and `n_sigs` tags. It rejects tags it does
-not implement or cannot parse, because a dropped tag is indistinguishable from
-an absent one. This check matches the mint's requirements and protects the
-slots from a rejected melt. `findUnsignedProofs` reports NUT-10 secrets the
-library cannot verify, such as HTLCs or P2PK secrets with malformed bodies.
+**`meltProofs` checks each P2PK witness before submission.** The card has
+already marked its slots spent when a terminal assembles a melt, so this
+preflight rejects missing or invalid witnesses and unsupported or malformed
+spending conditions before the request reaches the mint. The preflight checks
+the supported `sigflag` and `n_sigs` tags. It rejects tags it does not implement
+or cannot parse, because a dropped tag is indistinguishable from an absent one.
+`findUnsignedProofs` reports NUT-10 secrets the library cannot verify, such as
+HTLCs or P2PK secrets with malformed bodies.
 
 **The mint keeps overpayment when you omit change outputs.** `changeOutputs` on
 `meltProofs` is optional, so `selectProofsForMelt` minimises the overpay rather
@@ -171,8 +174,8 @@ than taking the largest proof that fits. If the mint charges
 a NUT-02 `input_fee_ppk`, pass it to `selectProofsForMelt` and `swapProofs`,
 otherwise every request is short by exactly the fee and gets rejected. The rate
 is declared *per keyset*, so once a rotation leaves a card holding proofs from
-two of them, pass a `{[keysetId]: input_fee_ppk}` map instead of one number; a
-a single rate applied to a mixed set is rejected to prevent mispricing.
+two of them, pass a `{[keysetId]: input_fee_ppk}` map instead of one number. A
+single rate applied to a mixed set is rejected to prevent mispricing.
 
 **Error-returning calls use a `T | CashuMintError` result.** These functions
 return errors instead of throwing, so check the result before use.
