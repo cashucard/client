@@ -1,13 +1,19 @@
 # @lnflash/cashu-client
 
-Cashu NFC card client library for crypto primitives and [Nutshell](https://github.com/cashubtc/nutshell) mint HTTP requests.
+Cashu NFC card client library for cryptographic primitives and [Nutshell](https://github.com/cashubtc/nutshell) mint HTTP requests.
 
-Part of the [Cashu-First Flash Cards](https://github.com/cashucard/javacard)
-project. The card holds Bitcoin-denominated ecash on its own chip and supports
+Part of [Cashu Card](https://github.com/cashucard/cashucard). The card holds Bitcoin-denominated ecash on its own chip and supports
 spending by tap at the point of sale, without a phone, account or internet connection.
 
 This library is the **host half**. The card stores proofs and signs. The host
 library handles blinding, mint communication and verification.
+
+> **Experimental.** Cashu Card is an experimental open source project. It is
+> built on NUT-CCP, a draft NUT proposal that has had little outside review, and
+> its testing so far is limited to dated reports in
+> [cashucard/cashucard](https://github.com/cashucard/cashucard). Keep only small
+> amounts on a card. Questions go to
+> [Discussions](https://github.com/cashucard/cashucard/discussions).
 
 | To understand… | Read |
 |---|---|
